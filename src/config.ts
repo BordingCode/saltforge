@@ -2,12 +2,12 @@
 // (and the headless harness imports the same constants). Numbers are design starting points.
 import type { ResourceKind, Resources, BuildingId, GearSlot } from './types.js';
 
-export const WORLD_W = 22;
-export const WORLD_H = 22;
+export const WORLD_W = 18;
+export const WORLD_H = 18;
 
-// Base sits at a corner; the rival's hold is diagonally far across the fog.
-export const BASE_POS = { col: 2, row: WORLD_H - 3 };
-export const RIVAL_POS = { col: WORLD_W - 3, row: 2 };
+// Base sits at a corner; the rival's hold is diagonally across the fog.
+export const BASE_POS = { col: 2, row: 15 };
+export const RIVAL_POS = { col: 15, row: 2 };
 
 // ---- Resources -----------------------------------------------------------------------------
 export const RESOURCES: ResourceKind[] = ['salt', 'timber', 'iron', 'firesalt'];
@@ -35,11 +35,14 @@ export interface BandDef {
   creatureChance: number;
   creatureBand: number;    // which creature tier spawns
 }
+// minDist = Chebyshev distance from base where this band begins. vigorStep is 0 — movement is
+// FREE; Vigor is spent only on harvesting/fighting (it caps extraction per trip, not travel).
+// Depth is gated by COMBAT (deep creatures are lethal without gear) + the menace clock.
 export const BANDS: BandDef[] = [
-  { id: 1, name: 'The Shoals',  tint: '#1d3a42', minDist: 0,  vigorStep: 1, nodeChance: 0.28, yields: ['salt', 'timber'],         nodeAmount: [3, 6],  creatureChance: 0.05, creatureBand: 1 },
-  { id: 2, name: 'The Marsh',   tint: '#243a2c', minDist: 6,  vigorStep: 1, nodeChance: 0.30, yields: ['timber', 'iron', 'salt'], nodeAmount: [4, 7],  creatureChance: 0.16, creatureBand: 2 },
-  { id: 3, name: 'The Reach',   tint: '#3a2e1d', minDist: 11, vigorStep: 2, nodeChance: 0.32, yields: ['iron', 'salt'],           nodeAmount: [5, 9],  creatureChance: 0.28, creatureBand: 3 },
-  { id: 4, name: 'The Saltmaw', tint: '#3a1d2b', minDist: 16, vigorStep: 2, nodeChance: 0.34, yields: ['firesalt', 'iron'],       nodeAmount: [3, 6],  creatureChance: 0.40, creatureBand: 4 },
+  { id: 1, name: 'The Shoals',  tint: '#1d3a42', minDist: 0,  vigorStep: 0, nodeChance: 0.40, yields: ['salt', 'timber', 'salt', 'timber', 'iron'], nodeAmount: [3, 6],  creatureChance: 0.05, creatureBand: 1 },
+  { id: 2, name: 'The Marsh',   tint: '#243a2c', minDist: 4,  vigorStep: 0, nodeChance: 0.40, yields: ['iron', 'iron', 'timber', 'salt'],            nodeAmount: [4, 7],  creatureChance: 0.12, creatureBand: 2 },
+  { id: 3, name: 'The Reach',   tint: '#3a2e1d', minDist: 8,  vigorStep: 0, nodeChance: 0.42, yields: ['iron', 'salt'],                              nodeAmount: [5, 9],  creatureChance: 0.18, creatureBand: 3 },
+  { id: 4, name: 'The Saltmaw', tint: '#3a1d2b', minDist: 11, vigorStep: 0, nodeChance: 0.50, yields: ['firesalt', 'firesalt', 'iron'],              nodeAmount: [3, 6],  creatureChance: 0.16, creatureBand: 4 },
 ];
 export function bandFor(dist: number): BandDef {
   let b = BANDS[0];
@@ -48,7 +51,7 @@ export function bandFor(dist: number): BandDef {
 }
 
 // ---- Hero / Vigor --------------------------------------------------------------------------
-export const HERO_MAX_VIGOR = 10;
+export const HERO_MAX_VIGOR = 14;   // ~14 harvest/fight actions per expedition (movement is free)
 export const HERO_MAX_HP = 30;
 export const HARVEST_VIGOR = 1;     // vigor to land one harvest hit
 export const FIGHT_VIGOR = 1;       // vigor per attack exchange
@@ -112,10 +115,13 @@ export const SALVO_AMMO_COST: Partial<Resources> = { firesalt: 1 }; // each salv
 export const SCAN_COST: Partial<Resources>[] = [{}, { firesalt: 1 }, { firesalt: 1 }, { firesalt: 2 }]; // by watchtower level
 
 // ---- Rival clock ---------------------------------------------------------------------------
+// The rival is an EXPEDITION-paced clock: menace rises each time you return to base, not per
+// footstep (so exploring isn't punished). Once menace passes fireThreshold the rival shells your
+// hidden grid on each of your homecomings. Difficulty = how fast it arms + how well it fires.
 export const DIFFICULTY = {
-  1: { name: 'Calm',   menacePerStep: 0.18, fireThreshold: 55, accuracy: 0.45, blunder: 0.45, fireEvery: 9 },
-  2: { name: 'Tense',  menacePerStep: 0.26, fireThreshold: 45, accuracy: 0.62, blunder: 0.25, fireEvery: 7 },
-  3: { name: 'Brutal', menacePerStep: 0.36, fireThreshold: 38, accuracy: 0.80, blunder: 0.10, fireEvery: 5 },
+  1: { name: 'Calm',   menacePerExpedition: 2.6, fireThreshold: 60, accuracy: 0.42, blunder: 0.50 },
+  2: { name: 'Tense',  menacePerExpedition: 5.5, fireThreshold: 46, accuracy: 0.64, blunder: 0.22 },
+  3: { name: 'Brutal', menacePerExpedition: 6.8, fireThreshold: 43, accuracy: 0.82, blunder: 0.08 },
 } as const;
 export type { DifficultyTier } from './types.js';
 

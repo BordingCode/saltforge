@@ -154,7 +154,7 @@ function endPlayerTurn(): void {
     if (shot?.wonForRival || keepSunk(Game.mine!)) { loseRun(); sfx.lose(); flush(); toEnd(); saveRun(); return; }
   }
   // menace keeps climbing while the guns trade
-  run.rival.menace = Math.min(100, run.rival.menace + DIFFICULTY[run.difficulty].menacePerStep * 2);
+  run.rival.menace = Math.min(100, run.rival.menace + 1.5);
   run.step++;
   bs.shotsLeft = 0;
   bs.message = hits ? (sunk ? `The rival's guns sink your ${sunk}!` : `The rival lands ${hits} hit${hits > 1 ? 's' : ''} on your hold.`) : 'The rival fires — and misses.';

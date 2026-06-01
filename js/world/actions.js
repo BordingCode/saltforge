@@ -42,16 +42,9 @@ export function moveInto(nc, nr) {
     Game.anim.t = 0;
     run.hero.col = nc;
     run.hero.row = nr;
-    // vigor / exhaustion
-    const cost = bandAt(nc, nr).vigorStep;
-    if (run.hero.vigor >= cost)
-        run.hero.vigor -= cost;
-    else {
-        run.hero.hp = Math.max(0, run.hero.hp - EXHAUST_HP);
-    }
+    // movement is free of Vigor; the rival's clock advances per expedition, not per step
     run.step++;
     revealAround(world, nc, nr);
-    rivalTick();
     let downed = false;
     if (run.hero.hp <= 0) {
         onDowned();
@@ -74,16 +67,13 @@ export function harvest() {
     }
     run.hero.vigor -= HARVEST_VIGOR;
     const kind = t.node.kind;
+    // Nodes are RENEWABLE taps — the land keeps giving; Vigor (actions/trip) is the real throttle,
+    // so a compact map never strip-mines into a dead end. Firesalt is scarcer than bulk materials.
     const hits = LANTERN_HARVEST[run.hero.gear.lantern] ?? 1;
-    const per = Math.max(1, Math.round(t.node.amount / Math.max(1, t.node.hp)));
-    const got = Math.min(t.node.amount, per * hits);
-    t.node.amount -= got;
-    t.node.hp -= hits;
+    const base = kind === 'firesalt' ? 1 : 2;
+    const got = base * hits;
     grant(kind, got);
-    if (t.node.amount <= 0 || t.node.hp <= 0)
-        t.node = null;
     run.step++;
-    rivalTick();
     return { kind, amount: got };
 }
 export function grant(kind, amount) {
@@ -112,6 +102,32 @@ function onArriveBase() {
     }
     else
         toast('Home. Vigor restored.');
+    rivalReturnTurn();
+}
+// The rival's clock — advances once per expedition (homecoming). Once armed it shells your hidden
+// grid here too, so a turtle who never strikes still loses.
+function rivalReturnTurn() {
+    const run = Game.run;
+    const d = DIFFICULTY[run.difficulty];
+    run.rival.menace = Math.min(100, run.rival.menace + d.menacePerExpedition);
+    telegraph();
+    if (!run.rival.canFire && run.rival.menace >= d.fireThreshold) {
+        run.rival.canFire = true;
+        toast('Their guns now range your shores. Fortify, and strike first.');
+    }
+    if (run.rival.canFire && Game.mine) {
+        const shots = (run.difficulty >= 2 ? 2 : 1) + (run.rival.menace >= 85 ? 1 : 0);
+        const rng = new RNG(hashSeed(run.seed, 0xF14e ^ run.step));
+        for (let i = 0; i < shots; i++) {
+            const shot = rivalFire(Game.mine, run.difficulty, rng);
+            if (shot?.hit)
+                toast(shot.sunk ? `The rival's salvo sinks your ${shot.sunk.kind}!` : 'A rival salvo scores a hit on your hold.');
+            if (shot?.wonForRival || keepSunk(Game.mine)) {
+                loseRun();
+                return;
+            }
+        }
+    }
 }
 export function forceDowned() { onDowned(); }
 function onDowned() {
@@ -131,27 +147,7 @@ function onDowned() {
     run.resources[worst] -= lost;
     toast(`You were overcome and dragged home. Lost ${lost} ${RES_META[worst].name}.`);
 }
-// ---- rival clock ---------------------------------------------------------------------------
-export function rivalTick() {
-    const run = Game.run;
-    const d = DIFFICULTY[run.difficulty];
-    run.rival.menace = Math.min(100, run.rival.menace + d.menacePerStep);
-    telegraph();
-    if (!run.rival.canFire && run.rival.menace >= d.fireThreshold) {
-        run.rival.canFire = true;
-        toast('Their guns now range your shores. Fortify, and strike first.');
-    }
-    // once armed, the rival periodically shells YOUR hidden grid
-    if (run.rival.canFire && run.step % d.fireEvery === 0 && Game.mine) {
-        const rng = new RNG(hashSeed(run.seed, 0xF14e ^ run.step));
-        const shot = rivalFire(Game.mine, run.difficulty, rng);
-        if (shot?.hit) {
-            toast(shot.sunk ? `The rival's salvo sinks your ${shot.sunk.kind}!` : 'A rival salvo scores a hit on your hold.');
-        }
-        if (shot?.wonForRival || keepSunk(Game.mine))
-            loseRun();
-    }
-}
+// ---- rival clock (telegraphs) --------------------------------------------------------------
 function telegraph() {
     const run = Game.run;
     const marks = [

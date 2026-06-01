@@ -36,7 +36,7 @@ export function generateWorld(seed) {
         tiles[n.row * w + n.col].terrain = 'ground';
     const world = { w, h, tiles, base: { ...BASE_POS }, rival: { ...RIVAL_POS } };
     // 2) carve a guaranteed corridor from base to rival so the world is always traversable
-    carveCorridor(world, BASE_POS, RIVAL_POS);
+    const corridor = carveCorridor(world, BASE_POS, RIVAL_POS);
     // 3) nodes + creatures + loot per band rules
     for (let r = 0; r < h; r++) {
         for (let c = 0; c < w; c++) {
@@ -47,8 +47,8 @@ export function generateWorld(seed) {
                 continue;
             const dist = distToBase(c, r);
             const band = bandFor(dist);
-            // keep the base doorstep calm
-            const nearBase = dist <= 2;
+            // keep only the immediate base tile + ring clear (else the whole Shoals would be node-free)
+            const nearBase = dist <= 1;
             if (!nearBase && rng.chance(band.nodeChance)) {
                 const kind = rng.pick(band.yields);
                 const amount = rng.int(band.nodeAmount[0], band.nodeAmount[1]);
@@ -65,6 +65,21 @@ export function generateWorld(seed) {
             }
         }
     }
+    // 3.5) GUARANTEE a reachable supply line: stamp Firesalt on a few Saltmaw corridor cells (the
+    // corridor is creature-cleared and reachable from base), so no map can wall off the ammo.
+    let fsPlaced = 0;
+    for (const cell of corridor) {
+        if (fsPlaced >= 4)
+            break;
+        if (cell.col === RIVAL_POS.col && cell.row === RIVAL_POS.row)
+            continue;
+        if (bandFor(distToBase(cell.col, cell.row)).id !== 4)
+            continue;
+        const t = tileAt(world, cell.col, cell.row);
+        t.creature = null;
+        t.node = { kind: 'firesalt', amount: 5, hp: 1 };
+        fsPlaced++;
+    }
     // 4) reveal the base ring at the start
     for (const n of [BASE_POS, ...neighbours4(BASE_POS.col, BASE_POS.row, w, h)]) {
         const t = tiles[n.row * w + n.col];
@@ -74,6 +89,7 @@ export function generateWorld(seed) {
 }
 // Bresenham-ish corridor: clear rocks/creatures along a line so there is always a way through.
 function carveCorridor(world, a, b) {
+    const cells = [];
     let { col: c, row: r } = a;
     const stepC = Math.sign(b.col - a.col), stepR = Math.sign(b.row - a.row);
     let guard = 0;
@@ -90,7 +106,17 @@ function carveCorridor(world, a, b) {
         if (t.terrain === 'rock')
             t.terrain = 'ground';
         t.creature = null;
+        cells.push({ col: c, row: r });
+        // widen the safe lane: clear creatures off the immediate neighbours too, so the deep is
+        // approachable by a careful (unarmoured) hero instead of walled off by ambushers
+        for (const n of neighbours4(c, r, world.w, world.h)) {
+            const nt = tileAt(world, n.col, n.row);
+            if (nt.terrain === 'rock')
+                nt.terrain = 'ground';
+            nt.creature = null;
+        }
     }
+    return cells;
 }
 export function passable(world, c, r) {
     if (!inBounds(c, r, world.w, world.h))

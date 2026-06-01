@@ -6,7 +6,7 @@ import { tryMove, moveInto, harvest, grabLoot, grant, toast as queueToast, force
 import { exchange, flee } from './sim/combat.js';
 import { upgradeBuilding, craftGear } from './economy.js';
 import { playerFire, scanLine, scanHotCold, scanAnchor, rivalFire, keepSunk, } from './sim/battleship.js';
-import { CANNON_SHOTS, SCAN_COST, DIFFICULTY, BASE_POS } from './config.js';
+import { CANNON_SHOTS, SCAN_COST, BASE_POS } from './config.js';
 import { sfx, setMuted, isMuted } from './engine/audio.js';
 import { $, clear, showToast } from './ui/dom.js';
 import { renderExploreHUD } from './ui/explore.js';
@@ -234,7 +234,7 @@ function endPlayerTurn() {
         }
     }
     // menace keeps climbing while the guns trade
-    run.rival.menace = Math.min(100, run.rival.menace + DIFFICULTY[run.difficulty].menacePerStep * 2);
+    run.rival.menace = Math.min(100, run.rival.menace + 1.5);
     run.step++;
     bs.shotsLeft = 0;
     bs.message = hits ? (sunk ? `The rival's guns sink your ${sunk}!` : `The rival lands ${hits} hit${hits > 1 ? 's' : ''} on your hold.`) : 'The rival fires — and misses.';

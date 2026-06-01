@@ -102,21 +102,27 @@ function gearRow(slot: GearSlot, h: Handlers): HTMLElement {
   const maxed = tier >= MAX_GEAR_TIER;
   const cost = nextGearCost(slot);
   const hasForge = run.buildings.forge >= 1;
+  const forgeGate = hasForge && !maxed && tier >= run.buildings.forge + 1; // Forge level caps craftable tier
   const afford = cost ? canAfford(cost) : false;
+  const canBuy = !maxed && hasForge && !forgeGate && afford;
 
-  return el('div', { class: `card ${hasForge ? '' : 'locked'}` }, [
+  const reqLine = !hasForge ? el('div', { class: 'card-req' }, ['Needs a Forge'])
+    : forgeGate ? el('div', { class: 'card-req' }, ['Upgrade the Forge to craft higher'])
+    : el('div', {}, []);
+
+  return el('div', { class: `card ${(hasForge && !forgeGate) ? '' : 'locked'}` }, [
     el('div', { class: 'card-main' }, [
       el('div', { class: 'card-name' }, [GEAR_META[slot].name, el('span', { class: 'lvl' }, [`${GEAR_TIER_NAMES[tier]}`])]),
       el('div', { class: 'card-blurb' }, [GEAR_META[slot].desc]),
       el('div', { class: 'card-eff' }, [gearEffect(slot, tier) + (maxed ? '' : `  →  ${gearEffect(slot, tier + 1)}`)]),
-      hasForge ? el('div', {}, []) : el('div', { class: 'card-req' }, ['Needs a Forge']),
+      reqLine,
     ]),
     el('div', { class: 'card-buy' }, [
       maxed ? el('div', { class: 'cost done' }, ['Mastered'])
             : el('div', { class: `cost ${afford ? '' : 'short'}` }, [costStr(cost)]),
       el('button', {
-        class: `buy ${(!maxed && hasForge && afford) ? '' : 'disabled'}`,
-        onclick: () => { if (!maxed && hasForge && afford) h.craft(slot); },
+        class: `buy ${canBuy ? '' : 'disabled'}`,
+        onclick: () => { if (canBuy) h.craft(slot); },
       }, [maxed ? 'Max' : tier === 0 ? 'Forge' : 'Improve']),
     ]),
   ]);

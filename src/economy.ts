@@ -61,6 +61,8 @@ export function craftGear(slot: GearSlot): { ok: boolean; reason?: string } {
   if (run.buildings.forge < 1) return { ok: false, reason: 'Build a Forge first.' };
   const tier = run.hero.gear[slot];
   if (tier >= MAX_GEAR_TIER) return { ok: false, reason: 'Already mastered.' };
+  // the Forge gates how high you can craft: level 1 -> tier 2, level 2 -> tier 3, level 3 -> tier 4
+  if (tier >= run.buildings.forge + 1) return { ok: false, reason: 'Upgrade the Forge to craft higher.' };
   const cost = nextGearCost(slot);
   if (!cost) return { ok: false, reason: 'Maxed.' };
   if (!canAfford(cost)) return { ok: false, reason: 'Not enough materials.' };
