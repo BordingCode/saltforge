@@ -3,6 +3,7 @@ import { Game } from '../state.js';
 import { el } from './dom.js';
 import { hasSave } from '../state.js';
 import { DIFFICULTY } from '../config.js';
+import { INTRO_LINES } from '../tutorial.js';
 import type { Handlers } from './handlers.js';
 import type { DifficultyTier } from '../types.js';
 
@@ -31,7 +32,27 @@ export function renderTitle(overlay: HTMLElement, h: Handlers): HTMLElement {
     el('div', { class: 'menu-label' }, ['Seed']),
     seedBox,
     el('button', { class: 'menu-btn primary', onclick: start }, ['New run']),
+    el('button', { class: 'menu-btn', onclick: () => h.showHelp() }, ['How to play']),
     el('div', { class: 'menu-foot' }, ['A turn-based frontier. Every step, the rival arms too.']),
+  ]);
+}
+
+// First-run welcome card (also reachable from the title's "How to play").
+export function renderIntro(overlay: HTMLElement, h: Handlers): HTMLElement {
+  return el('div', { class: 'sheet intro-sheet' }, [
+    el('div', { class: 'sheet-head' }, [el('div', { class: 'sheet-title' }, ['How to play'])]),
+    el('div', { class: 'intro-body' }, [
+      el('div', { class: 'intro-tag' }, ['Three loops, woven together:']),
+      ...INTRO_LINES.map(([title, body], i) => el('div', { class: 'intro-step' }, [
+        el('div', { class: 'intro-num' }, [String(i + 1)]),
+        el('div', {}, [el('div', { class: 'intro-step-title' }, [title]), el('div', { class: 'intro-step-body' }, [body])]),
+      ])),
+      el('div', { class: 'intro-hint' }, ['Move by tapping a tile next to your hero (or arrow keys). A goal banner will guide your first run.']),
+    ]),
+    el('div', { class: 'intro-actions' }, [
+      el('button', { class: 'buy wide', onclick: () => h.closeOverlay() }, ['Begin']),
+      el('button', { class: 'buy ghost', onclick: () => h.skipTutorial() }, ['Skip the tips']),
+    ]),
   ]);
 }
 

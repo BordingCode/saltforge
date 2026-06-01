@@ -5,14 +5,26 @@ import { el, clear } from './dom.js';
 import { tileAt } from '../world/worldgen.js';
 import { bandAt } from '../world/actions.js';
 import { RES_META, BASE_POS } from '../config.js';
+import { currentStage } from '../tutorial.js';
 import type { Handlers } from './handlers.js';
 import type { ResourceKind } from '../types.js';
 
 export function renderExploreHUD(hud: HTMLElement, h: Handlers): void {
   clear(hud);
   const run = Game.run!; const world = Game.world!;
-  hud.appendChild(topBar(run));
+  const top = el('div', { class: 'hud-top' }, [topBar(run)]);
+  const goal = currentStage();
+  if (goal) top.appendChild(objectiveRibbon(goal, h));
+  hud.appendChild(top);
   hud.appendChild(controls(run, world, h));
+}
+
+function objectiveRibbon(goal: { n: number; total: number; text: string }, h: Handlers): HTMLElement {
+  return el('div', { class: 'objective' }, [
+    el('div', { class: 'obj-badge' }, [`GOAL ${goal.n}/${goal.total}`]),
+    el('div', { class: 'obj-text' }, [goal.text]),
+    el('button', { class: 'obj-skip', onclick: () => h.skipTutorial(), title: 'Hide tutorial' }, ['✕']),
+  ]);
 }
 
 function topBar(run: any): HTMLElement {

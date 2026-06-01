@@ -15,7 +15,8 @@ import { renderExploreHUD } from './ui/explore.js';
 import { renderBase } from './ui/base.js';
 import { renderBattleship } from './ui/battleship.js';
 import { renderCombat } from './ui/combat.js';
-import { renderTitle, renderEnd } from './ui/menu.js';
+import { renderTitle, renderEnd, renderIntro } from './ui/menu.js';
+import { shouldShowIntro, markIntroSeen, completeTutorial, tutorialActive, allStagesDone } from './tutorial.js';
 let overlay = 'title';
 let encounter = null;
 let bsTurn = 0;
@@ -113,9 +114,15 @@ export const handlers = {
     combatFlee() { doFlee(); },
     newGame(seedStr, difficulty) {
         newRun(seedStr, difficulty);
-        overlay = 'none';
         encounter = null;
-        queueToast('Wash ashore. Gather Timber & Salt, then raise a Saltern and a Forge.');
+        if (shouldShowIntro()) {
+            overlay = 'intro';
+            markIntroSeen();
+        }
+        else {
+            overlay = 'none';
+            queueToast('Wash ashore. Gather Timber & Salt, then raise a Forge.');
+        }
         afterAction();
     },
     resume() { if (loadRun()) {
@@ -124,6 +131,8 @@ export const handlers = {
     } },
     toMenu() { overlay = 'title'; renderUI(); },
     toggleMute() { setMuted(!isMuted()); renderUI(); },
+    skipTutorial() { completeTutorial(); overlay = 'none'; renderUI(); },
+    showHelp() { overlay = 'intro'; renderUI(); },
 };
 // ---- combat --------------------------------------------------------------------------------
 function openCombat(tile) {
@@ -220,6 +229,14 @@ function doFire(c, r) {
         bs.message = 'No shots — load a salvo.';
         renderUI();
         return;
+    }
+    const run = Game.run;
+    if (!run.objectivesDone.includes('struck')) {
+        run.objectivesDone.push('struck');
+        if (tutorialActive() && allStagesDone()) {
+            completeTutorial();
+            queueToast('You know the ropes — now sink their Keep before they sink yours!');
+        }
     }
     const res = playerFire(Game.enemy, c, r);
     if (res.alreadyShot) {
@@ -384,6 +401,17 @@ export function renderUI() {
     const ov = $('#overlay');
     if (!hud || !ov)
         return;
+    if (tutorialActive() && allStagesDone())
+        completeTutorial(); // safety net
+    // intro card can appear over the title (How to play) or over a fresh run
+    if (overlay === 'intro') {
+        if (Game.run && !Game.run.over)
+            renderExploreHUD(hud, handlers);
+        else
+            clear(hud);
+        ov.replaceChildren(renderIntro(ov, handlers));
+        return;
+    }
     if (!Game.run || overlay === 'title') {
         clear(hud);
         ov.replaceChildren(renderTitle(ov, handlers));

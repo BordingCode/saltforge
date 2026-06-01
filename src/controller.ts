@@ -22,11 +22,12 @@ import { renderExploreHUD } from './ui/explore.js';
 import { renderBase } from './ui/base.js';
 import { renderBattleship, type BSState } from './ui/battleship.js';
 import { renderCombat } from './ui/combat.js';
-import { renderTitle, renderEnd } from './ui/menu.js';
+import { renderTitle, renderEnd, renderIntro } from './ui/menu.js';
+import { shouldShowIntro, markIntroSeen, completeTutorial, tutorialActive, allStagesDone } from './tutorial.js';
 import type { Handlers } from './ui/handlers.js';
 import type { CreatureData, Tile, BuildingId, GearSlot, DifficultyTier } from './types.js';
 
-type Overlay = 'title' | 'none' | 'base' | 'battleship' | 'combat' | 'end';
+type Overlay = 'title' | 'none' | 'base' | 'battleship' | 'combat' | 'end' | 'intro';
 let overlay: Overlay = 'title';
 let encounter: { creature: CreatureData; tile: Tile; log: string[] } | null = null;
 let bsTurn = 0;
@@ -94,13 +95,16 @@ export const handlers: Handlers = {
   combatFlee() { doFlee(); },
   newGame(seedStr: string, difficulty: DifficultyTier) {
     newRun(seedStr, difficulty);
-    overlay = 'none'; encounter = null;
-    queueToast('Wash ashore. Gather Timber & Salt, then raise a Saltern and a Forge.');
+    encounter = null;
+    if (shouldShowIntro()) { overlay = 'intro'; markIntroSeen(); }
+    else { overlay = 'none'; queueToast('Wash ashore. Gather Timber & Salt, then raise a Forge.'); }
     afterAction();
   },
   resume() { if (loadRun()) { overlay = 'none'; renderUI(); } },
   toMenu() { overlay = 'title'; renderUI(); },
   toggleMute() { setMuted(!isMuted()); renderUI(); },
+  skipTutorial() { completeTutorial(); overlay = 'none'; renderUI(); },
+  showHelp() { overlay = 'intro'; renderUI(); },
 };
 
 // ---- combat --------------------------------------------------------------------------------
@@ -171,6 +175,11 @@ function beginOrEndSalvo(): void {
 }
 function doFire(c: number, r: number): void {
   if (bs.shotsLeft <= 0) { bs.message = 'No shots — load a salvo.'; renderUI(); return; }
+  const run = Game.run!;
+  if (!run.objectivesDone.includes('struck')) {
+    run.objectivesDone.push('struck');
+    if (tutorialActive() && allStagesDone()) { completeTutorial(); queueToast('You know the ropes — now sink their Keep before they sink yours!'); }
+  }
   const res = playerFire(Game.enemy!, c, r);
   if (res.alreadyShot) { bs.message = 'Already struck there.'; renderUI(); return; }
   bs.shotsLeft--;
@@ -262,6 +271,15 @@ function doHotCold(c: number, r: number): void {
 export function renderUI(): void {
   const hud = $('#hud'); const ov = $('#overlay');
   if (!hud || !ov) return;
+
+  if (tutorialActive() && allStagesDone()) completeTutorial(); // safety net
+
+  // intro card can appear over the title (How to play) or over a fresh run
+  if (overlay === 'intro') {
+    if (Game.run && !Game.run.over) renderExploreHUD(hud, handlers); else clear(hud);
+    ov.replaceChildren(renderIntro(ov, handlers));
+    return;
+  }
 
   if (!Game.run || overlay === 'title') { clear(hud); ov.replaceChildren(renderTitle(ov, handlers)); return; }
   if (overlay === 'end' || Game.run.over) { clear(hud); ov.replaceChildren(renderEnd(ov, Game.run.result === 'won', handlers)); return; }

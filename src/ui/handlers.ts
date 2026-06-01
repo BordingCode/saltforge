@@ -22,4 +22,6 @@ export interface Handlers {
   resume(): void;
   toMenu(): void;
   toggleMute(): void;
+  skipTutorial(): void;
+  showHelp(): void;
 }
