@@ -8,6 +8,8 @@ import { upgradeBuilding, craftGear, canAfford, pay } from './economy.js';
 import { playerFire, scanLine, scanHotCold, scanAnchor, rivalFire, keepSunk, keepHealth, repairKeep, } from './sim/battleship.js';
 import { CANNON_SHOTS, SCAN_COST, BASE_POS, DUEL_BASE_SHOTS, DUEL_MAX_SHOTS, DUEL_RAMP_EVERY, REINFORCE_COST, } from './config.js';
 import { sfx, setMuted, isMuted } from './engine/audio.js';
+import { addTrauma, flash, burst, popText, haptic, centerOf, pop } from './juice.js';
+import { RES_META } from './config.js';
 import { $, clear, showToast } from './ui/dom.js';
 import { renderExploreHUD } from './ui/explore.js';
 import { renderBase } from './ui/base.js';
@@ -42,10 +44,28 @@ export const handlers = {
         }
         afterAction();
     },
-    harvest() { if (harvest())
-        sfx.harvest(); afterAction(); },
-    grab() { if (grabLoot())
-        sfx.loot(); afterAction(); },
+    harvest() {
+        const got = harvest();
+        if (got) {
+            sfx.harvest();
+            const p = centerOf('.act-harvest') || centerOf('.topbar');
+            if (p)
+                popText(p.x, p.y - 8, `+${got.amount}`, RES_META[got.kind].color);
+            addTrauma(0.05);
+        }
+        afterAction();
+    },
+    grab() {
+        const got = grabLoot();
+        if (got) {
+            sfx.loot();
+            const p = centerOf('.act-loot') || centerOf('.topbar');
+            if (p)
+                popText(p.x, p.y - 8, `+${got.amount} ${RES_META[got.kind].name}`, RES_META[got.kind].color);
+            addTrauma(0.08);
+        }
+        afterAction();
+    },
     openBase() { if (Game.run && !Game.run.over) {
         overlay = 'base';
         renderUI();
@@ -117,10 +137,20 @@ function doAttack() {
     if (!encounter)
         return;
     const run = Game.run;
+    const foePos = centerOf('.foe') || centerOf('.combat-sheet');
+    const mePos = centerOf('.me') || foePos;
     const ex = exchange(run.hero, encounter.creature);
     encounter.log.push(ex.log);
     sfx.hit();
+    // your strike landing on the foe
+    if (foePos) {
+        burst(foePos.x, foePos.y, { color: '#ff8a4a', count: ex.creatureDead ? 22 : 11, spread: ex.creatureDead ? 88 : 52, size: 7 });
+        popText(foePos.x, foePos.y, `-${ex.heroDmg}`, '#ffd54a');
+    }
+    pop('.foe-name');
+    addTrauma(ex.creatureDead ? 0.42 : 0.18);
     if (ex.creatureDead) {
+        sfx.explode();
         const b = encounter.creature.bounty;
         Object.entries(b).forEach(([k, v]) => grant(k, v));
         const bounty = Object.entries(b).map(([k, v]) => `${v} ${k}`).join(', ');
@@ -133,8 +163,15 @@ function doAttack() {
         afterAction();
         return;
     }
-    if (ex.creatureDmg > 0)
+    // the foe hits back
+    if (ex.creatureDmg > 0) {
         sfx.hurt();
+        flash(`rgba(255,70,70,${ex.heroDowned ? 0.4 : 0.2})`);
+        addTrauma(ex.heroDowned ? 0.5 : 0.24);
+        haptic(ex.heroDowned ? [0, 60, 40, 60] : 28);
+        if (mePos)
+            popText(mePos.x, mePos.y, `-${ex.creatureDmg}`, '#ff6b6b');
+    }
     if (ex.heroDowned) {
         encounter = null;
         overlay = 'none';
@@ -191,17 +228,35 @@ function doFire(c, r) {
         return;
     }
     bs.shotsLeft--;
+    const pos = centerOf(`.bs-cell[data-cell="${res.cell}"]`);
     if (res.hit) {
         sfx.salvoHit();
         bs.message = res.sunk ? `Sunk their ${res.sunk.kind}!` : 'A hit!';
+        if (pos) {
+            burst(pos.x, pos.y, { color: '#ff7a3c', count: res.sunk ? 24 : 12, spread: res.sunk ? 95 : 58, size: res.sunk ? 9 : 7 });
+            if (res.sunk)
+                burst(pos.x, pos.y, { color: '#ffd54a', count: 14, spread: 70, size: 6 });
+            popText(pos.x, pos.y, res.sunk ? 'SUNK!' : 'HIT', res.sunk ? '#ffd54a' : '#ff7a3c');
+        }
+        addTrauma(res.sunk ? 0.55 : 0.24);
+        if (res.sunk) {
+            sfx.explode();
+            flash('rgba(232,184,75,0.16)');
+        }
+        haptic(res.sunk ? [0, 30, 40, 35] : 18);
     }
     else {
         sfx.splash();
         bs.message = 'Splash — into open water.';
+        if (pos)
+            burst(pos.x, pos.y, { color: '#4a7c8a', count: 6, spread: 28, size: 5 });
     }
     if (res.won) {
         winRun();
         sfx.win();
+        flash('rgba(232,184,75,0.3)');
+        addTrauma(0.8);
+        haptic([0, 60, 50, 60, 50, 90]);
         flush();
         toEnd();
         saveRun();
@@ -244,8 +299,12 @@ function rivalBarrage() {
     bs.message = hits
         ? (sunk ? `Their guns sink your ${sunk}!` : `Rival barrage: ${hits} hit${hits > 1 ? 's' : ''}${kh.sighted ? ' — your KEEP is sighted! Reinforce or finish them.' : '.'}`)
         : 'The rival fires — and misses.';
-    if (hits)
+    if (hits) {
         sfx.hurt();
+        flash(`rgba(255,70,70,${Math.min(0.34, 0.14 + hits * 0.08)})`);
+        addTrauma(Math.min(0.55, 0.2 + hits * 0.12));
+        haptic(kh.sighted ? [0, 50, 30, 50] : 30);
+    }
     renderUI();
     saveRun();
 }

@@ -6,6 +6,7 @@ import { drawOverworld } from './render/overworld.js';
 import { handlers, renderUI } from './controller.js';
 // (Game + handlers exposed on window.__sf at boot for testing.)
 import { unlockAudio } from './engine/audio.js';
+import { initJuice, tickShake } from './juice.js';
 
 let view: View;
 
@@ -14,6 +15,7 @@ function loop(ts: number): void {
   const a = Game.anim;
   if (a.heroFrom) { a.t += 0.14; if (a.t >= 1) { a.t = 1; a.heroFrom = null; } }
   if (view) drawOverworld(view);
+  tickShake();
   requestAnimationFrame(loop);
 }
 
@@ -49,6 +51,7 @@ function wireInput(canvas: HTMLCanvasElement): void {
 function boot(): void {
   const canvas = document.getElementById('world') as HTMLCanvasElement;
   view = setupCanvas(canvas);
+  initJuice(document.getElementById('app')!, document.getElementById('fx')!);
   wireInput(canvas);
   renderUI();
   requestAnimationFrame(loop);

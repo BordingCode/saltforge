@@ -6,6 +6,7 @@ import { drawOverworld } from './render/overworld.js';
 import { handlers, renderUI } from './controller.js';
 // (Game + handlers exposed on window.__sf at boot for testing.)
 import { unlockAudio } from './engine/audio.js';
+import { initJuice, tickShake } from './juice.js';
 let view;
 function loop(ts) {
     // advance hero step animation
@@ -19,6 +20,7 @@ function loop(ts) {
     }
     if (view)
         drawOverworld(view);
+    tickShake();
     requestAnimationFrame(loop);
 }
 function tileDirFromTap(col, row) {
@@ -64,6 +66,7 @@ function wireInput(canvas) {
 function boot() {
     const canvas = document.getElementById('world');
     view = setupCanvas(canvas);
+    initJuice(document.getElementById('app'), document.getElementById('fx'));
     wireInput(canvas);
     renderUI();
     requestAnimationFrame(loop);

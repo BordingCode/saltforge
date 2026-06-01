@@ -34,7 +34,7 @@ export function renderBattleship(overlay, bs, h) {
                 cls += ' know-empty';
             const label = sunkCells.has(cell) ? '✺' : hit ? '✕' : shot ? '·' : enemy.knownShip.has(cell) ? '◎' : '';
             grid.appendChild(el('button', {
-                class: cls, onclick: () => onCell(c, r, bs, h),
+                class: cls, dataset: { cell }, onclick: () => onCell(c, r, bs, h),
             }, [label]));
         }
     // the two-keep race — the heart of the tension

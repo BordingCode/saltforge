@@ -41,7 +41,7 @@ export function renderBattleship(overlay: HTMLElement, bs: BSState, h: Handlers)
     else if (enemy.knownEmpty.has(cell)) cls += ' know-empty';
     const label = sunkCells.has(cell) ? '✺' : hit ? '✕' : shot ? '·' : enemy.knownShip.has(cell) ? '◎' : '';
     grid.appendChild(el('button', {
-      class: cls, onclick: () => onCell(c, r, bs, h),
+      class: cls, dataset: { cell }, onclick: () => onCell(c, r, bs, h),
     }, [label]));
   }
 
