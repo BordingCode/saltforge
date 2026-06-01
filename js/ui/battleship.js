@@ -2,8 +2,8 @@
 // turn guesses into deductions. Turn model lives in the controller; this just renders + dispatches.
 import { Game } from '../state.js';
 import { el } from './dom.js';
-import { isSunk } from '../sim/battleship.js';
-import { BS_GRID, RES_META, CANNON_SHOTS, SCAN_COST } from '../config.js';
+import { isSunk, keepHealth } from '../sim/battleship.js';
+import { BS_GRID, RES_META, CANNON_SHOTS, SCAN_COST, DUEL_BASE_SHOTS, DUEL_MAX_SHOTS, DUEL_RAMP_EVERY, REINFORCE_COST, } from '../config.js';
 const k = (c, r) => `${c},${r}`;
 export function renderBattleship(overlay, bs, h) {
     const run = Game.run;
@@ -37,11 +37,12 @@ export function renderBattleship(overlay, bs, h) {
                 class: cls, onclick: () => onCell(c, r, bs, h),
             }, [label]));
         }
-    // your hold status
-    const myKeep = mine.structures.find((s) => s.kind === 'keep');
-    const keepHits = myKeep ? myKeep.hits.size : 0;
-    const keepLen = myKeep ? myKeep.cells.length : 0;
-    const myHit = mine.structures.reduce((n, s) => n + s.hits.size, 0);
+    // the two-keep race — the heart of the tension
+    const theirs = keepHealth(enemy);
+    const mineKh = keepHealth(mine);
+    const barrage = Math.min(DUEL_MAX_SHOTS, DUEL_BASE_SHOTS[run.difficulty] + Math.floor(bs.duelTurn / DUEL_RAMP_EVERY));
+    const rising = Math.floor((bs.duelTurn + 1) / DUEL_RAMP_EVERY) > Math.floor(bs.duelTurn / DUEL_RAMP_EVERY);
+    const canReinforce = mineKh.hits > 0 && run.resources.firesalt >= 0 && (run.resources.iron >= (REINFORCE_COST.iron ?? 0));
     const scanBar = el('div', { class: 'scan-bar' }, [
         scanBtn('Scan a line', 'line', wt >= 1, SCAN_COST[1], bs, h),
         scanBtn('Hot / cold', 'hot', wt >= 2, SCAN_COST[2], bs, h),
@@ -52,19 +53,38 @@ export function renderBattleship(overlay, bs, h) {
             el('div', { class: 'sheet-title' }, ['Strike the Rival']),
             el('button', { class: 'close-x', onclick: () => h.closeOverlay() }, ['Retreat']),
         ]),
+        // dual keep-health race
+        el('div', { class: 'duel-race' }, [
+            keepBar('THEIR KEEP', theirs.len - theirs.hits, theirs.len, 'enemy'),
+            el('div', { class: 'vs' }, ['vs']),
+            keepBar('YOUR KEEP', mineKh.len - mineKh.hits, mineKh.len, mineKh.sighted ? 'sighted' : 'mine'),
+        ]),
+        mineKh.sighted ? el('div', { class: 'sighted-warn' }, ['⚠ Your Keep is sighted — reinforce, or sink them first!']) : el('div', {}, []),
         el('div', { class: 'bs-info' }, [
             el('div', { class: 'bs-stat' }, [el('b', {}, [`${RES_META.firesalt.glyph} ${ammo}`]), ' Firesalt']),
             el('div', { class: 'bs-stat' }, [el('b', {}, [`${bs.shotsLeft}`]), ` shots (Battery ${cannon}/turn)`]),
-            el('div', { class: 'bs-stat' }, [`Your Keep: ${keepLen - keepHits}/${keepLen} intact`, myHit ? `  •  ${myHit} hits taken` : '']),
+            el('div', { class: `bs-stat ${barrage >= 4 ? 'danger' : ''}` }, ['Rival barrage ', el('b', {}, [`${barrage}`]), rising ? ' ▲ rising' : '']),
         ]),
         el('div', { class: 'bs-msg' }, [bs.message || (bs.mode === 'hotcold' ? 'Tap a cell to read its distance.' : 'Tap a cell to fire.')]),
         grid,
         scanBar,
         el('div', { class: 'bs-actions' }, [
             ammo <= 0 && bs.shotsLeft <= 0
-                ? el('div', { class: 'hint big' }, ['Out of Firesalt — sail to the Saltmaw for more.'])
-                : el('button', { class: 'buy wide', onclick: () => h.beginSalvo() }, [bs.shotsLeft > 0 ? 'End turn (rival fires)' : `Load salvo  (${RES_META.firesalt.glyph}1)`]),
+                ? el('div', { class: 'hint big' }, ['Out of Firesalt — retreat to the Saltmaw for more (they keep firing).'])
+                : el('button', { class: 'buy wide', onclick: () => h.beginSalvo() }, [bs.shotsLeft > 0 ? 'End turn — rival fires' : `Load salvo  (${RES_META.firesalt.glyph}1)`]),
+            mineKh.hits > 0
+                ? el('button', { class: `buy wide ${canReinforce ? 'ghost' : 'disabled'}`, onclick: () => { if (canReinforce)
+                        h.reinforce(); } }, [`Reinforce Keep  (${REINFORCE_COST.iron} ${RES_META.iron.glyph}, hold fire)`])
+                : el('div', {}, []),
         ]),
+    ]);
+}
+function keepBar(label, intact, len, tone) {
+    const pips = el('div', { class: 'keep-pips' }, Array.from({ length: len }, (_, i) => el('span', { class: `pip ${i < intact ? 'on' : 'off'} ${tone}` }, [])));
+    return el('div', { class: `keep-side ${tone}` }, [
+        el('div', { class: 'keep-label' }, [label]),
+        pips,
+        el('div', { class: 'keep-num' }, [`${intact}/${len}`]),
     ]);
 }
 function onCell(c, r, bs, h) {

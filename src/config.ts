@@ -1,6 +1,6 @@
 // Central tunables. EVERY balance number lives here so the whole game is tuned from one file
 // (and the headless harness imports the same constants). Numbers are design starting points.
-import type { ResourceKind, Resources, BuildingId, GearSlot } from './types.js';
+import type { ResourceKind, Resources, BuildingId, GearSlot, DifficultyTier } from './types.js';
 
 export const WORLD_W = 18;
 export const WORLD_H = 18;
@@ -120,10 +120,19 @@ export const SCAN_COST: Partial<Resources>[] = [{}, { firesalt: 1 }, { firesalt:
 // hidden grid on each of your homecomings. Difficulty = how fast it arms + how well it fires.
 export const DIFFICULTY = {
   1: { name: 'Calm',   menacePerExpedition: 2.6, fireThreshold: 60, accuracy: 0.42, blunder: 0.50 },
-  2: { name: 'Tense',  menacePerExpedition: 5.5, fireThreshold: 46, accuracy: 0.64, blunder: 0.22 },
-  3: { name: 'Brutal', menacePerExpedition: 6.8, fireThreshold: 43, accuracy: 0.82, blunder: 0.08 },
+  2: { name: 'Tense',  menacePerExpedition: 5.3, fireThreshold: 45, accuracy: 0.64, blunder: 0.20 },
+  3: { name: 'Brutal', menacePerExpedition: 6.2, fireThreshold: 44, accuracy: 0.80, blunder: 0.10 },
 } as const;
 export type { DifficultyTier } from './types.js';
+
+// ---- Salvo-duel tension --------------------------------------------------------------------
+// The rival's return barrage ESCALATES the longer the duel drags (so reaching the strike isn't an
+// auto-win — finish fast or be overwhelmed). You may spend Iron to patch your Keep mid-fight,
+// sacrificing your salvo that turn (offense vs defense under pressure).
+export const DUEL_BASE_SHOTS: Record<DifficultyTier, number> = { 1: 1, 2: 1, 3: 2 };
+export const DUEL_RAMP_EVERY = 3;   // +1 barrage shot per this many duel turns survived
+export const DUEL_MAX_SHOTS = 5;
+export const REINFORCE_COST: Partial<Resources> = { iron: 8 };
 
 export const SAVE_KEY = 'saltforge_run_v1';
 export const META_KEY = 'saltforge_meta_v1';

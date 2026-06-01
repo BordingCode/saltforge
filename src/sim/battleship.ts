@@ -135,6 +135,25 @@ export function applyBulwarkDecoys(grid: MyGrid, seed: number, level: number): v
 export const isSunk = (s: Structure): boolean => s.hits.size >= s.cells.length;
 export const keepOf = (g: GridBase): Structure | undefined => g.structures.find((s) => s.kind === 'keep');
 export const keepSunk = (g: GridBase): boolean => { const kp = keepOf(g); return !!kp && isSunk(kp); };
+
+// Keep-health snapshot for the UI race bar. `sighted` = the rival has landed (unfinished) hits on it.
+export function keepHealth(g: GridBase): { hits: number; len: number; sighted: boolean } {
+  const kp = keepOf(g);
+  if (!kp) return { hits: 0, len: 0, sighted: false };
+  return { hits: kp.hits.size, len: kp.cells.length, sighted: kp.hits.size > 0 && !isSunk(kp) };
+}
+
+// Reinforce: patch one hit on MY keep AND scatter the rival's lock (it drops back to blind hunting).
+export function repairKeep(g: MyGrid): boolean {
+  const kp = keepOf(g);
+  if (!kp || kp.hits.size === 0) return false;
+  const cell = [...kp.hits].pop()!;
+  kp.hits.delete(cell);
+  g.shots.delete(cell);                 // the rival must re-find that cell
+  g.ai.openHits = g.ai.openHits.filter((c) => c !== cell);
+  if (!g.ai.openHits.length) g.ai.mode = 'hunt';
+  return true;
+}
 function structureAt(g: GridBase, cell: string): Structure | undefined { return g.structures.find((s) => s.cells.includes(cell)); }
 
 // ---- PLAYER firing at the enemy ------------------------------------------------------------

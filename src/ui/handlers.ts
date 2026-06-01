@@ -12,6 +12,7 @@ export interface Handlers {
   upgrade(id: BuildingId): void;
   craft(slot: GearSlot): void;
   beginSalvo(): void;
+  reinforce(): void;
   fireSalvo(col: number, row: number): void;
   scan(kind: 'line' | 'hot' | 'anchor'): void;
   pickHotCold(col: number, row: number): void;

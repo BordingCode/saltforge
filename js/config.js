@@ -84,8 +84,16 @@ export const SCAN_COST = [{}, { firesalt: 1 }, { firesalt: 1 }, { firesalt: 2 }]
 // hidden grid on each of your homecomings. Difficulty = how fast it arms + how well it fires.
 export const DIFFICULTY = {
     1: { name: 'Calm', menacePerExpedition: 2.6, fireThreshold: 60, accuracy: 0.42, blunder: 0.50 },
-    2: { name: 'Tense', menacePerExpedition: 5.5, fireThreshold: 46, accuracy: 0.64, blunder: 0.22 },
-    3: { name: 'Brutal', menacePerExpedition: 6.8, fireThreshold: 43, accuracy: 0.82, blunder: 0.08 },
+    2: { name: 'Tense', menacePerExpedition: 5.3, fireThreshold: 45, accuracy: 0.64, blunder: 0.20 },
+    3: { name: 'Brutal', menacePerExpedition: 6.2, fireThreshold: 44, accuracy: 0.80, blunder: 0.10 },
 };
+// ---- Salvo-duel tension --------------------------------------------------------------------
+// The rival's return barrage ESCALATES the longer the duel drags (so reaching the strike isn't an
+// auto-win — finish fast or be overwhelmed). You may spend Iron to patch your Keep mid-fight,
+// sacrificing your salvo that turn (offense vs defense under pressure).
+export const DUEL_BASE_SHOTS = { 1: 1, 2: 1, 3: 2 };
+export const DUEL_RAMP_EVERY = 3; // +1 barrage shot per this many duel turns survived
+export const DUEL_MAX_SHOTS = 5;
+export const REINFORCE_COST = { iron: 8 };
 export const SAVE_KEY = 'saltforge_run_v1';
 export const META_KEY = 'saltforge_meta_v1';

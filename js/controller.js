@@ -4,9 +4,9 @@ import { Game, newRun, loadRun, saveRun } from './state.js';
 import { RNG, hashSeed } from './rng.js';
 import { tryMove, moveInto, harvest, grabLoot, grant, toast as queueToast, forceDowned, winRun, loseRun, } from './world/actions.js';
 import { exchange, flee } from './sim/combat.js';
-import { upgradeBuilding, craftGear } from './economy.js';
-import { playerFire, scanLine, scanHotCold, scanAnchor, rivalFire, keepSunk, } from './sim/battleship.js';
-import { CANNON_SHOTS, SCAN_COST, BASE_POS } from './config.js';
+import { upgradeBuilding, craftGear, canAfford, pay } from './economy.js';
+import { playerFire, scanLine, scanHotCold, scanAnchor, rivalFire, keepSunk, keepHealth, repairKeep, } from './sim/battleship.js';
+import { CANNON_SHOTS, SCAN_COST, BASE_POS, DUEL_BASE_SHOTS, DUEL_MAX_SHOTS, DUEL_RAMP_EVERY, REINFORCE_COST, } from './config.js';
 import { sfx, setMuted, isMuted } from './engine/audio.js';
 import { $, clear, showToast } from './ui/dom.js';
 import { renderExploreHUD } from './ui/explore.js';
@@ -17,7 +17,7 @@ import { renderTitle, renderEnd } from './ui/menu.js';
 let overlay = 'title';
 let encounter = null;
 let bsTurn = 0;
-const bs = { shotsLeft: 0, scanUsed: false, mode: 'fire', message: '' };
+const bs = { shotsLeft: 0, scanUsed: false, mode: 'fire', message: '', duelTurn: 0 };
 function flush() { while (Game.toastQueue.length)
     showToast(Game.toastQueue.shift()); }
 function afterAction() { flush(); if (Game.run?.over)
@@ -63,7 +63,8 @@ export const handlers = {
         bs.shotsLeft = 0;
         bs.scanUsed = false;
         bs.mode = 'fire';
-        bs.message = 'Load a salvo to open fire.';
+        bs.duelTurn = 0;
+        bs.message = 'Load a salvo to open fire. Their guns answer — and sharpen the longer you take.';
         renderUI();
     },
     closeOverlay() { overlay = 'none'; renderUI(); saveRun(); },
@@ -84,6 +85,7 @@ export const handlers = {
         afterAction();
     },
     beginSalvo() { beginOrEndSalvo(); },
+    reinforce() { doReinforce(); },
     fireSalvo(c, r) { doFire(c, r); },
     scan(kind) { doScan(kind); },
     pickHotCold(c, r) { doHotCold(c, r); },
@@ -210,11 +212,12 @@ function doFire(c, r) {
     renderUI();
     saveRun();
 }
-function endPlayerTurn() {
-    bsTurn++;
+function endPlayerTurn() { bsTurn++; rivalBarrage(); }
+// The rival's return barrage — its size ESCALATES with each duel turn survived, so a drawn-out
+// hunt gets you overwhelmed. Returns early (to the end screen) if your Keep falls.
+function rivalBarrage() {
     const run = Game.run;
-    // rival returns fire: 1 shot, +1 if heavily armed
-    const shots = run.rival.menace >= 75 ? 2 : 1;
+    const shots = Math.min(DUEL_MAX_SHOTS, DUEL_BASE_SHOTS[run.difficulty] + Math.floor(bs.duelTurn / DUEL_RAMP_EVERY));
     let hits = 0;
     let sunk = '';
     for (let i = 0; i < shots; i++) {
@@ -233,15 +236,39 @@ function endPlayerTurn() {
             return;
         }
     }
-    // menace keeps climbing while the guns trade
     run.rival.menace = Math.min(100, run.rival.menace + 1.5);
     run.step++;
+    bs.duelTurn++;
     bs.shotsLeft = 0;
-    bs.message = hits ? (sunk ? `The rival's guns sink your ${sunk}!` : `The rival lands ${hits} hit${hits > 1 ? 's' : ''} on your hold.`) : 'The rival fires — and misses.';
+    const kh = keepHealth(Game.mine);
+    bs.message = hits
+        ? (sunk ? `Their guns sink your ${sunk}!` : `Rival barrage: ${hits} hit${hits > 1 ? 's' : ''}${kh.sighted ? ' — your KEEP is sighted! Reinforce or finish them.' : '.'}`)
+        : 'The rival fires — and misses.';
     if (hits)
         sfx.hurt();
     renderUI();
     saveRun();
+}
+// Reinforce: forfeit your salvo this turn to patch your Keep + break the rival's lock (then they fire).
+function doReinforce() {
+    const run = Game.run;
+    const kh = keepHealth(Game.mine);
+    if (kh.hits === 0) {
+        bs.message = 'Your Keep is unscathed — pour fire into them instead.';
+        renderUI();
+        return;
+    }
+    if (!canAfford(REINFORCE_COST)) {
+        queueToast(`Need ${REINFORCE_COST.iron} Iron to reinforce the Keep.`);
+        flush();
+        return;
+    }
+    pay(REINFORCE_COST);
+    repairKeep(Game.mine);
+    sfx.build();
+    bs.message = 'You shore up the Keep and scatter their lock — guns silent this turn.';
+    bsTurn++;
+    rivalBarrage();
 }
 function doScan(kind) {
     const run = Game.run;

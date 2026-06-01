@@ -10,7 +10,7 @@ import { neighbours4 } from '../js/grid.js';
 import { upgradeBuilding, craftGear, nextBuildingCost, nextGearCost, canAfford, meetsRequirements } from '../js/economy.js';
 import { exchange, flee } from '../js/sim/combat.js';
 import { playerFire, scanLine, scanAnchor, scanHotCold, rivalFire, keepSunk, isSunk } from '../js/sim/battleship.js';
-import { WEAPON_ATK, ARMOR_DEF, BANDS, CANNON_SHOTS, RIVAL_POS, BASE_POS } from '../js/config.js';
+import { WEAPON_ATK, ARMOR_DEF, BANDS, CANNON_SHOTS, RIVAL_POS, BASE_POS, DUEL_BASE_SHOTS, DUEL_MAX_SHOTS, DUEL_RAMP_EVERY } from '../js/config.js';
 
 const CAP = 4000;
 const k = (c, r) => `${c},${r}`;
@@ -157,10 +157,10 @@ function runEndgame(seed) {
     run.resources.firesalt -= 1;
     let shots = CANNON_SHOTS[run.buildings.cannon] ?? 1;
     while (shots-- > 0 && !run.over) { const cell = chooseShot(enemy); if (!cell) break; const [c, r] = cell.split(',').map(Number); const res = playerFire(enemy, c, r); if (res.won) { run.over = true; run.result = 'won'; return; } }
-    // rival returns fire
-    const rshots = run.rival.menace >= 75 ? 2 : 1;
+    // rival returns fire — barrage ESCALATES with each duel turn (bot doesn't reinforce: conservative)
+    const rshots = Math.min(DUEL_MAX_SHOTS, DUEL_BASE_SHOTS[run.difficulty] + Math.floor(turn / DUEL_RAMP_EVERY));
     for (let i = 0; i < rshots; i++) { const sh = rivalFire(mine, run.difficulty, new RNG(hashSeed(seed, (turn << 8) ^ i ^ 0x55))); if (sh?.wonForRival || keepSunk(mine)) { run.over = true; run.result = 'lost'; return; } }
-    run.rival.menace = Math.min(100, run.rival.menace + 0.6);
+    run.rival.menace = Math.min(100, run.rival.menace + 1.5);
     turn++;
     if (turn > 60) break;
   }
