@@ -1,0 +1,78 @@
+// Spending: building upgrades and hero gear crafting, with their side-effects (storage cap,
+// hero max HP, Bulwark decoys). All cost/effect numbers come from config.
+import { Game, syncHeroMaxHp } from './state.js';
+import { applyBulwarkDecoys } from './sim/battleship.js';
+import { BUILDING_BY_ID, BUILDINGS, BASE_STORAGE_CAP, GEAR_COST, MAX_GEAR_TIER, } from './config.js';
+export function canAfford(cost) {
+    const res = Game.run.resources;
+    return Object.keys(cost).every((k) => res[k] >= (cost[k] ?? 0));
+}
+export function pay(cost) {
+    const res = Game.run.resources;
+    Object.keys(cost).forEach((k) => { res[k] -= cost[k] ?? 0; });
+}
+export function nextBuildingCost(id) {
+    const def = BUILDING_BY_ID[id];
+    const lvl = Game.run.buildings[id];
+    if (lvl >= def.maxLevel)
+        return null;
+    return def.cost[lvl + 1] ?? null;
+}
+export function meetsRequirements(id) {
+    const def = BUILDING_BY_ID[id];
+    if (!def.requires)
+        return true;
+    const b = Game.run.buildings;
+    return Object.keys(def.requires).every((req) => b[req] >= (def.requires[req] ?? 0));
+}
+export function upgradeBuilding(id) {
+    const run = Game.run;
+    const def = BUILDING_BY_ID[id];
+    if (run.buildings[id] >= def.maxLevel)
+        return { ok: false, reason: 'Already at max level.' };
+    if (!meetsRequirements(id))
+        return { ok: false, reason: 'Requires another building first.' };
+    const cost = nextBuildingCost(id);
+    if (!cost)
+        return { ok: false, reason: 'Maxed.' };
+    if (!canAfford(cost))
+        return { ok: false, reason: 'Not enough materials.' };
+    pay(cost);
+    run.buildings[id]++;
+    applyBuildingEffects(id);
+    return { ok: true };
+}
+function applyBuildingEffects(id) {
+    const run = Game.run;
+    if (id === 'saltern')
+        run.storageCap = BASE_STORAGE_CAP + run.buildings.saltern * 30;
+    if (id === 'bulwark' && Game.mine)
+        applyBulwarkDecoys(Game.mine, run.seed, run.buildings.bulwark);
+    // keep / cannon / watchtower effects are read live from levels elsewhere
+}
+// ---- gear ----------------------------------------------------------------------------------
+export function nextGearCost(slot) {
+    const tier = Game.run.hero.gear[slot];
+    if (tier >= MAX_GEAR_TIER)
+        return null;
+    return GEAR_COST[slot][tier + 1] ?? null;
+}
+export function craftGear(slot) {
+    const run = Game.run;
+    if (run.buildings.forge < 1)
+        return { ok: false, reason: 'Build a Forge first.' };
+    const tier = run.hero.gear[slot];
+    if (tier >= MAX_GEAR_TIER)
+        return { ok: false, reason: 'Already mastered.' };
+    const cost = nextGearCost(slot);
+    if (!cost)
+        return { ok: false, reason: 'Maxed.' };
+    if (!canAfford(cost))
+        return { ok: false, reason: 'Not enough materials.' };
+    pay(cost);
+    run.hero.gear[slot]++;
+    if (slot === 'armor')
+        syncHeroMaxHp();
+    return { ok: true };
+}
+export const ALL_BUILDINGS = BUILDINGS;

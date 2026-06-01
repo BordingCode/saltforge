@@ -1,0 +1,14 @@
+{
+  "name": "Saltforge",
+  "short_name": "Saltforge",
+  "description": "Explore the fog, forge your hold, and sink a hidden rival.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c1418",
+  "theme_color": "#0c1418",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
