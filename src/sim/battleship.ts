@@ -3,7 +3,7 @@
 // turns luck into deduction via Watchtower scans; the rival fires at the player's grid with a
 // fair probability-density AI (+ honest, difficulty-scaled blunders). No DOM, no rendering.
 import { RNG, hashSeed } from '../rng.js';
-import { BS_GRID } from '../config.js';
+import { BS_GRID, KEEP_GRID_HP } from '../config.js';
 import { DIFFICULTY, type DifficultyTier } from '../config.js';
 
 export type Orient = 'h' | 'v';
@@ -38,14 +38,19 @@ export interface MyGrid extends GridBase {
 const k = (c: number, r: number): string => `${c},${r}`;
 const parse = (s: string): [number, number] => { const [c, r] = s.split(',').map(Number); return [c, r]; };
 
-// Standard fleet: the Keep (len 3, the target) + two secondary structures. Bulwark adds decoys
-// to MY grid only (more cells for the rival to waste shots on).
+// Standard fleet: the Keep (the target) + two secondary structures. Bulwark adds decoys
+// to MY grid only (more cells for the rival to waste shots on). The Keep's LENGTH is its
+// hits-to-sink: the enemy keep uses the standard length; MY keep grows with my Keep level
+// (KEEP_GRID_HP), so upgrading the Keep genuinely hardens my hidden grid.
 const KEEP_LEN = 3;
-const FLEET_BASE: Array<{ kind: Structure['kind']; len: number }> = [
-  { kind: 'keep', len: KEEP_LEN },
+const fleetBase = (keepLen: number): Array<{ kind: Structure['kind']; len: number }> => [
+  { kind: 'keep', len: keepLen },
   { kind: 'forge', len: 2 },
   { kind: 'wall', len: 2 },
 ];
+const FLEET_BASE = fleetBase(KEEP_LEN);
+// MY keep length by Keep building level (length == hits the rival must land to sink it).
+export const myKeepLen = (level: number): number => KEEP_GRID_HP[level] ?? KEEP_GRID_HP[1];
 
 function cellsFor(c: number, r: number, len: number, o: Orient): string[] {
   const out: string[] = [];
@@ -103,10 +108,43 @@ export function makeEnemyGrid(seed: number, _difficulty: DifficultyTier): EnemyG
   };
 }
 
-export function makeMyGrid(seed: number): MyGrid {
+export function makeMyGrid(seed: number, keepLevel = 1): MyGrid {
   const rng = new RNG(hashSeed(seed, 0x31d7));
-  const structures = placeFleet(rng, BS_GRID, FLEET_BASE);
+  const structures = placeFleet(rng, BS_GRID, fleetBase(myKeepLen(keepLevel)));
   return { size: BS_GRID, structures, shots: new Set(), ai: { mode: 'hunt', openHits: [] } };
+}
+
+// Re-fit MY keep to a new Keep building level: a longer keep = more hits-to-sink. Called when the
+// Keep upgrades mid-run. Repositions the keep (clear of the other structures + decoys), resetting
+// any rival progress on it (a freshly reinforced, longer keep), and re-scatters the rival's lock.
+export function applyKeepLevel(grid: MyGrid, seed: number, level: number): void {
+  const kp = keepOf(grid);
+  const wantLen = myKeepLen(level);
+  if (kp && kp.cells.length === wantLen) return; // already correct
+  const others = grid.structures.filter((s) => s.kind !== 'keep');
+  const occupied = new Set<string>();
+  for (const s of others) for (const cell of s.cells) {
+    const [cc, rr] = parse(cell);
+    for (let dc = -1; dc <= 1; dc++) for (let dr = -1; dr <= 1; dr++) occupied.add(k(cc + dc, rr + dr));
+  }
+  const rng = new RNG(hashSeed(seed, 0x4EEb ^ (level << 4)));
+  let placed: Structure | null = null;
+  for (let tries = 0; tries < 600 && !placed; tries++) {
+    const o: Orient = rng.chance(0.5) ? 'h' : 'v';
+    const c = o === 'h' ? rng.int(0, grid.size - wantLen) : rng.int(0, grid.size - 1);
+    const r = o === 'v' ? rng.int(0, grid.size - wantLen) : rng.int(0, grid.size - 1);
+    const cells = cellsFor(c, r, wantLen, o);
+    if (cells.some((cell) => occupied.has(cell))) continue;
+    placed = { id: 'keep', kind: 'keep', len: wantLen, col: c, row: r, orient: o, cells, hits: new Set() };
+  }
+  if (!placed) return; // couldn't fit — leave the old keep rather than corrupt the grid
+  // remove the old keep, drop the rival's shots/lock on its cells, install the new one
+  const oldKeep = kp ? new Set(kp.cells) : new Set<string>();
+  grid.structures = others;
+  grid.structures.push(placed);
+  for (const cell of oldKeep) grid.shots.delete(cell);
+  grid.ai.openHits = grid.ai.openHits.filter((cell) => !oldKeep.has(cell));
+  if (!grid.ai.openHits.length) grid.ai.mode = 'hunt';
 }
 
 // Add Bulwark decoys to MY grid (call when Bulwark levels up). idempotent-ish: pass total level.

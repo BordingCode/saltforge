@@ -1,7 +1,7 @@
 // Title screen, difficulty pick, and the win/lose end screen.
 import { Game } from '../state.js';
 import { el } from './dom.js';
-import { hasSave } from '../state.js';
+import { hasSave, recordOutcome } from '../state.js';
 import { DIFFICULTY } from '../config.js';
 import { INTRO_LINES } from '../tutorial.js';
 import type { Handlers } from './handlers.js';
@@ -58,6 +58,16 @@ export function renderIntro(overlay: HTMLElement, h: Handlers): HTMLElement {
 
 export function renderEnd(overlay: HTMLElement, won: boolean, h: Handlers): HTMLElement {
   const run = Game.run!;
+  // record this outcome into the cross-run ledger (idempotent) and show the record on this tier
+  const meta = recordOutcome();
+  const tier = run.difficulty;
+  const tierName = DIFFICULTY[tier].name;
+  const wins = meta.wins[tier];
+  const losses = meta.losses[tier];
+
+  // "New run" keeps the same difficulty but rolls a fresh seed — straight back into the loop.
+  const replay = () => h.newGame('salt-' + Math.floor(Date.now() % 1e7).toString(36), tier);
+
   return el('div', { class: 'menu end' }, [
     el('div', { class: `menu-mark ${won ? 'win' : 'lose'}` }, [won ? 'VICTORY' : 'YOUR KEEP FALLS']),
     el('div', { class: 'menu-tag' }, [won
@@ -66,9 +76,11 @@ export function renderEnd(overlay: HTMLElement, won: boolean, h: Handlers): HTML
     el('div', { class: 'end-stats' }, [
       stat('Steps taken', String(run.step)),
       stat('Seed', run.seedStr),
-      stat('Difficulty', DIFFICULTY[run.difficulty].name),
+      stat('Difficulty', tierName),
+      stat(`${tierName} record`, `${wins}W – ${losses}L`),
     ]),
-    el('button', { class: 'menu-btn primary', onclick: () => h.toMenu() }, ['Back to title']),
+    el('button', { class: 'menu-btn primary', onclick: replay }, [`New run (${tierName})`]),
+    el('button', { class: 'menu-btn', onclick: () => h.toMenu() }, ['Back to title']),
   ]);
 }
 

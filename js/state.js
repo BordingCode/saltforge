@@ -2,7 +2,7 @@
 // reads and writes (KB canvas-engine pattern).
 import { seedFromString } from './rng.js';
 import { generateWorld } from './world/worldgen.js';
-import { WORLD_W, WORLD_H, BASE_POS, STARTING_RESOURCES, BASE_STORAGE_CAP, HERO_MAX_VIGOR, HERO_MAX_HP, ARMOR_HP, DIFFICULTY, SAVE_KEY, } from './config.js';
+import { WORLD_W, WORLD_H, BASE_POS, STARTING_RESOURCES, BASE_STORAGE_CAP, HERO_MAX_VIGOR, HERO_MAX_HP, ARMOR_HP, DIFFICULTY, SAVE_KEY, META_KEY, emptyResources, } from './config.js';
 import { makeEnemyGrid, makeMyGrid } from './sim/battleship.js';
 export const Game = {
     run: null, world: null, enemy: null, mine: null,
@@ -19,6 +19,7 @@ export function newRun(seedStr, difficulty) {
         seed, seedStr, difficulty,
         step: 0, phase: 'explore',
         resources: STARTING_RESOURCES(),
+        haul: emptyResources(),
         storageCap: BASE_STORAGE_CAP,
         buildings: { keep: 1, saltern: 0, bulwark: 0, cannon: 0, watchtower: 0, forge: 0 },
         hero: {
@@ -35,7 +36,7 @@ export function newRun(seedStr, difficulty) {
     };
     Game.run = run;
     Game.enemy = makeEnemyGrid(seed, difficulty);
-    Game.mine = makeMyGrid(seed);
+    Game.mine = makeMyGrid(seed, run.buildings.keep);
     Game.view.followedOnce = false;
     return run;
 }
@@ -98,6 +99,42 @@ export function hasSave() {
     catch {
         return false;
     }
+}
+const emptyMeta = () => ({ wins: { 1: 0, 2: 0, 3: 0 }, losses: { 1: 0, 2: 0, 3: 0 } });
+export function loadMeta() {
+    try {
+        const raw = localStorage.getItem(META_KEY);
+        if (!raw)
+            return emptyMeta();
+        const m = JSON.parse(raw);
+        const base = emptyMeta();
+        if (m.wins)
+            Object.assign(base.wins, m.wins);
+        if (m.losses)
+            Object.assign(base.losses, m.losses);
+        return base;
+    }
+    catch {
+        return emptyMeta();
+    }
+}
+// Record the outcome of a finished run, once. Guarded by a per-run flag so re-renders don't
+// double-count. Returns the updated record.
+export function recordOutcome() {
+    const m = loadMeta();
+    const run = Game.run;
+    if (run && run.over && run.result && !run.recorded) {
+        run.recorded = true;
+        if (run.result === 'won')
+            m.wins[run.difficulty]++;
+        else
+            m.losses[run.difficulty]++;
+        try {
+            localStorage.setItem(META_KEY, JSON.stringify(m));
+        }
+        catch { /* ignore */ }
+    }
+    return m;
 }
 // armor tier sets max hp; call when gear changes
 export function syncHeroMaxHp() {

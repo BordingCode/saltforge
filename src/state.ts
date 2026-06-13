@@ -4,7 +4,7 @@ import { RNG, seedFromString } from './rng.js';
 import { generateWorld, type World } from './world/worldgen.js';
 import {
   WORLD_W, WORLD_H, BASE_POS, RIVAL_POS, STARTING_RESOURCES, BASE_STORAGE_CAP,
-  HERO_MAX_VIGOR, HERO_MAX_HP, ARMOR_HP, DIFFICULTY, SAVE_KEY,
+  HERO_MAX_VIGOR, HERO_MAX_HP, ARMOR_HP, DIFFICULTY, SAVE_KEY, META_KEY, emptyResources,
 } from './config.js';
 import type { RunState, BuildingId, DifficultyTier } from './types.js';
 import { type EnemyGrid, type MyGrid, makeEnemyGrid, makeMyGrid } from './sim/battleship.js';
@@ -37,6 +37,7 @@ export function newRun(seedStr: string, difficulty: DifficultyTier): RunState {
     seed, seedStr, difficulty,
     step: 0, phase: 'explore',
     resources: STARTING_RESOURCES(),
+    haul: emptyResources(),
     storageCap: BASE_STORAGE_CAP,
     buildings: { keep: 1, saltern: 0, bulwark: 0, cannon: 0, watchtower: 0, forge: 0 },
     hero: {
@@ -53,7 +54,7 @@ export function newRun(seedStr: string, difficulty: DifficultyTier): RunState {
   };
   Game.run = run;
   Game.enemy = makeEnemyGrid(seed, difficulty);
-  Game.mine = makeMyGrid(seed);
+  Game.mine = makeMyGrid(seed, run.buildings.keep);
   Game.view.followedOnce = false;
   return run;
 }
@@ -95,6 +96,37 @@ export function clearSave(): void {
 
 export function hasSave(): boolean {
   try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false; const b = JSON.parse(raw); return b && b.run && !b.run.over; } catch { return false; }
+}
+
+// ---- meta progress (persists across runs) --------------------------------------------------
+// A small between-run ledger: wins & losses per difficulty, so the end screen can show a record
+// and the "New run" button gives a real loop. (Kept separate from the per-run SAVE_KEY.)
+export interface MetaRecord { wins: Record<DifficultyTier, number>; losses: Record<DifficultyTier, number>; }
+const emptyMeta = (): MetaRecord => ({ wins: { 1: 0, 2: 0, 3: 0 }, losses: { 1: 0, 2: 0, 3: 0 } });
+
+export function loadMeta(): MetaRecord {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (!raw) return emptyMeta();
+    const m = JSON.parse(raw) as Partial<MetaRecord>;
+    const base = emptyMeta();
+    if (m.wins) Object.assign(base.wins, m.wins);
+    if (m.losses) Object.assign(base.losses, m.losses);
+    return base;
+  } catch { return emptyMeta(); }
+}
+
+// Record the outcome of a finished run, once. Guarded by a per-run flag so re-renders don't
+// double-count. Returns the updated record.
+export function recordOutcome(): MetaRecord {
+  const m = loadMeta();
+  const run = Game.run;
+  if (run && run.over && run.result && !(run as RunState & { recorded?: boolean }).recorded) {
+    (run as RunState & { recorded?: boolean }).recorded = true;
+    if (run.result === 'won') m.wins[run.difficulty]++; else m.losses[run.difficulty]++;
+    try { localStorage.setItem(META_KEY, JSON.stringify(m)); } catch { /* ignore */ }
+  }
+  return m;
 }
 
 // armor tier sets max hp; call when gear changes

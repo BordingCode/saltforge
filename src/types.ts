@@ -65,6 +65,7 @@ export interface RunState {
   step: number;           // shared clock — every hero step advances it
   phase: Phase;
   resources: Resources;
+  haul: Resources;        // resources gathered since the last time home (forfeit if downed deep)
   storageCap: number;
   buildings: Record<BuildingId, number>; // level, 0 = not built (keep starts 1)
   hero: Hero;

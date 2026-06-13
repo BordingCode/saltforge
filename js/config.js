@@ -14,14 +14,15 @@ export const RES_META = {
 export const emptyResources = () => ({ salt: 0, timber: 0, iron: 0, firesalt: 0 });
 export const STARTING_RESOURCES = () => ({ salt: 12, timber: 6, iron: 0, firesalt: 0 });
 export const BASE_STORAGE_CAP = 60; // per-resource soft cap (Saltern raises it)
-// minDist = Chebyshev distance from base where this band begins. vigorStep is 0 — movement is
-// FREE; Vigor is spent only on harvesting/fighting (it caps extraction per trip, not travel).
-// Depth is gated by COMBAT (deep creatures are lethal without gear) + the menace clock.
+// minDist = Chebyshev distance from base where this band begins. vigorStep = Vigor spent per step
+// taken while standing in this band: the shallow bands are free to roam, but each step deep into
+// the Reach/Saltmaw burns the same budget you'd spend harvesting — so a deep run trades reach for
+// haul, and you can't loiter in the lethal bands. Depth is also gated by COMBAT + the menace clock.
 export const BANDS = [
     { id: 1, name: 'The Shoals', tint: '#1d3a42', minDist: 0, vigorStep: 0, nodeChance: 0.40, yields: ['salt', 'timber', 'salt', 'timber', 'iron'], nodeAmount: [3, 6], creatureChance: 0.05, creatureBand: 1 },
     { id: 2, name: 'The Marsh', tint: '#243a2c', minDist: 4, vigorStep: 0, nodeChance: 0.40, yields: ['iron', 'iron', 'timber', 'salt'], nodeAmount: [4, 7], creatureChance: 0.12, creatureBand: 2 },
-    { id: 3, name: 'The Reach', tint: '#3a2e1d', minDist: 8, vigorStep: 0, nodeChance: 0.42, yields: ['iron', 'salt'], nodeAmount: [5, 9], creatureChance: 0.18, creatureBand: 3 },
-    { id: 4, name: 'The Saltmaw', tint: '#3a1d2b', minDist: 11, vigorStep: 0, nodeChance: 0.50, yields: ['firesalt', 'firesalt', 'iron'], nodeAmount: [3, 6], creatureChance: 0.16, creatureBand: 4 },
+    { id: 3, name: 'The Reach', tint: '#3a2e1d', minDist: 8, vigorStep: 1, nodeChance: 0.42, yields: ['iron', 'salt'], nodeAmount: [5, 9], creatureChance: 0.18, creatureBand: 3 },
+    { id: 4, name: 'The Saltmaw', tint: '#3a1d2b', minDist: 11, vigorStep: 2, nodeChance: 0.50, yields: ['firesalt', 'firesalt', 'iron'], nodeAmount: [3, 6], creatureChance: 0.16, creatureBand: 4 },
 ];
 export function bandFor(dist) {
     let b = BANDS[0];
@@ -91,9 +92,9 @@ export const DIFFICULTY = {
 // The rival's return barrage ESCALATES the longer the duel drags (so reaching the strike isn't an
 // auto-win — finish fast or be overwhelmed). You may spend Iron to patch your Keep mid-fight,
 // sacrificing your salvo that turn (offense vs defense under pressure).
-export const DUEL_BASE_SHOTS = { 1: 1, 2: 1, 3: 2 };
-export const DUEL_RAMP_EVERY = 3; // +1 barrage shot per this many duel turns survived
-export const DUEL_MAX_SHOTS = 5;
+export const DUEL_BASE_SHOTS = { 1: 1, 2: 1, 3: 3 };
+export const DUEL_RAMP_EVERY = 2; // +1 barrage shot per this many duel turns survived
+export const DUEL_MAX_SHOTS = 6;
 export const REINFORCE_COST = { iron: 8 };
 export const SAVE_KEY = 'saltforge_run_v1';
 export const META_KEY = 'saltforge_meta_v1';

@@ -7,7 +7,7 @@ import { tileAt, passable, type World } from './worldgen.js';
 import { rivalFire, keepSunk } from '../sim/battleship.js';
 import {
   BANDS, bandFor, BASE_POS, LANTERN_RADIUS, LANTERN_HARVEST, HARVEST_VIGOR,
-  SALTERN_INCOME, DIFFICULTY, RES_META,
+  SALTERN_INCOME, DIFFICULTY, RES_META, emptyResources,
 } from '../config.js';
 import type { ResourceKind, Tile } from '../types.js';
 
@@ -56,7 +56,10 @@ export function moveInto(nc: number, nr: number): MoveOutcome {
   Game.anim.t = 0;
   run.hero.col = nc; run.hero.row = nr;
 
-  // movement is free of Vigor; the rival's clock advances per expedition, not per step
+  // Deep travel costs Vigor (per the band you step INTO): the Reach/Saltmaw drain your budget so a
+  // deep run trades reach for haul and you can't loiter in lethal water. The Shoals/Marsh stay free.
+  const step = bandFor(distToBase(nc, nr)).vigorStep;
+  if (step > 0) run.hero.vigor = Math.max(0, run.hero.vigor - step);
   run.step++;
   revealAround(world, nc, nr);
 
@@ -88,7 +91,10 @@ export function harvest(): { kind: ResourceKind; amount: number } | null {
 
 export function grant(kind: ResourceKind, amount: number): void {
   const run = Game.run!;
+  const before = run.resources[kind];
   run.resources[kind] = Math.min(run.storageCap, run.resources[kind] + amount);
+  // track the unbanked haul (what actually landed, after the cap) so a deep wipe can forfeit it
+  if (run.haul) run.haul[kind] += run.resources[kind] - before;
 }
 
 // Picking up a loot cache on the current tile.
@@ -103,6 +109,8 @@ export function grabLoot(): { kind: ResourceKind; amount: number } | null {
 
 function onArriveBase(): void {
   const run = Game.run!;
+  // the haul is banked the instant you reach home — safe from here on
+  resetHaul();
   run.hero.vigor = run.hero.maxVigor;
   const income = SALTERN_INCOME[run.buildings.saltern] ?? 0;
   if (income > 0) { grant('salt', income); toast(`Home. Saltern yields ${income} Salt. Vigor restored.`); }
@@ -134,17 +142,28 @@ function rivalReturnTurn(): void {
 
 export function forceDowned(): void { onDowned(); }
 
+function resetHaul(): void {
+  const run = Game.run!;
+  run.haul = emptyResources();
+}
+
 function onDowned(): void {
   const run = Game.run!;
   run.hero.col = BASE_POS.col; run.hero.row = BASE_POS.row;
   run.hero.hp = Math.max(1, Math.round(run.hero.maxHp * 0.5));
   run.hero.vigor = run.hero.maxVigor;
-  // lose a little of the most-held resource as a setback (never run-ending)
-  let worst: ResourceKind = 'salt'; let mx = -1;
-  (Object.keys(run.resources) as ResourceKind[]).forEach((kk) => { if (run.resources[kk] > mx) { mx = run.resources[kk]; worst = kk; } });
-  const lost = Math.min(run.resources[worst], 3);
-  run.resources[worst] -= lost;
-  toast(`You were overcome and dragged home. Lost ${lost} ${RES_META[worst].name}.`);
+  // REAL setback: everything you gathered this expedition is lost where you fell — only what you
+  // already carried home is safe. Going down deep with a heavy unbanked haul genuinely hurts.
+  const haul = run.haul ?? emptyResources();
+  const parts: string[] = [];
+  (Object.keys(haul) as ResourceKind[]).forEach((kk) => {
+    const drop = Math.min(run.resources[kk], haul[kk]);
+    if (drop > 0) { run.resources[kk] -= drop; parts.push(`${drop} ${RES_META[kk].name}`); }
+  });
+  resetHaul();
+  toast(parts.length
+    ? `You were overcome and dragged home. Your haul is lost: ${parts.join(', ')}.`
+    : 'You were overcome and dragged home — but carried nothing to lose.');
 }
 
 // ---- rival clock (telegraphs) --------------------------------------------------------------

@@ -1,6 +1,6 @@
 // Saltforge service worker — network-first so deploys go live immediately, with an
 // offline cache fallback. Bump CACHE on every deploy. (Pattern: gamedev-kb/pwa-and-service-worker.)
-const CACHE = 'saltforge-v1';
+const CACHE = 'saltforge-v2';
 const SHELL = [
   './',
   './index.html',

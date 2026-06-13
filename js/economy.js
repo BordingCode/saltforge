@@ -1,7 +1,7 @@
 // Spending: building upgrades and hero gear crafting, with their side-effects (storage cap,
 // hero max HP, Bulwark decoys). All cost/effect numbers come from config.
 import { Game, syncHeroMaxHp } from './state.js';
-import { applyBulwarkDecoys } from './sim/battleship.js';
+import { applyBulwarkDecoys, applyKeepLevel } from './sim/battleship.js';
 import { BUILDING_BY_ID, BUILDINGS, BASE_STORAGE_CAP, GEAR_COST, MAX_GEAR_TIER, } from './config.js';
 export function canAfford(cost) {
     const res = Game.run.resources;
@@ -48,7 +48,13 @@ function applyBuildingEffects(id) {
         run.storageCap = BASE_STORAGE_CAP + run.buildings.saltern * 30;
     if (id === 'bulwark' && Game.mine)
         applyBulwarkDecoys(Game.mine, run.seed, run.buildings.bulwark);
-    // keep / cannon / watchtower effects are read live from levels elsewhere
+    if (id === 'keep' && Game.mine) {
+        // a longer keep = more hits-to-sink. Re-fit then re-stamp decoys (placement may have shifted).
+        applyKeepLevel(Game.mine, run.seed, run.buildings.keep);
+        if (run.buildings.bulwark)
+            applyBulwarkDecoys(Game.mine, run.seed, run.buildings.bulwark);
+    }
+    // cannon / watchtower effects are read live from levels elsewhere
 }
 // ---- gear ----------------------------------------------------------------------------------
 export function nextGearCost(slot) {

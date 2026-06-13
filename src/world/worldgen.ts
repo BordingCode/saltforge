@@ -75,17 +75,20 @@ export function generateWorld(seed: number): World {
     }
   }
 
-  // 3.5) GUARANTEE a reachable supply line: stamp Firesalt on a few Saltmaw corridor cells (the
-  // corridor is creature-cleared and reachable from base), so no map can wall off the ammo.
-  let fsPlaced = 0;
-  for (const cell of corridor) {
-    if (fsPlaced >= 4) break;
-    if (cell.col === RIVAL_POS.col && cell.row === RIVAL_POS.row) continue;
-    if (bandFor(distToBase(cell.col, cell.row)).id !== 4) continue;
-    const t = tileAt(world, cell.col, cell.row);
-    t.creature = null;
-    t.node = { kind: 'firesalt', amount: 5, hp: 1 };
-    fsPlaced++;
+  // 3.5) The corridor stays creature-cleared so the deep is APPROACHABLE, but it no longer hands
+  // out free Firesalt — gear (armour to survive, a weapon to clear the way) gates the deep, not a
+  // free lane. We only GUARANTEE that some Firesalt exists in the Saltmaw at all, so no seed can
+  // wall off the ammo entirely; the player must still fight/travel to reach it.
+  void corridor;
+  const hasFiresalt = world.tiles.some((t) => t.node?.kind === 'firesalt');
+  if (!hasFiresalt) {
+    const saltmaw = world.tiles.filter((t) =>
+      t.terrain === 'ground' && bandFor(distToBase(t.col, t.row)).id === 4 &&
+      !(t.col === RIVAL_POS.col && t.row === RIVAL_POS.row));
+    if (saltmaw.length) {
+      const t = rng.pick(saltmaw);
+      t.node = { kind: 'firesalt', amount: rng.int(4, 7), hp: 2 };
+    }
   }
 
   // 4) reveal the base ring at the start
