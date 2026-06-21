@@ -34,3 +34,5 @@ self.addEventListener('fetch', (e) => {
       .catch(() => caches.match(req).then((m) => m || caches.match('./index.html')))
   );
 });
+
+// hub-stats tracker v1
